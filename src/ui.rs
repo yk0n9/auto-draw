@@ -242,6 +242,9 @@ impl Draw for Panel {
             }
         });
         ui.separator();
+        ui.label("Press F1 to start draw");
+        ui.label("Press F2 to stop draw");
+        ui.separator();
 
         if let Some(image) = self.canny_image.read().as_ref() {
             ui.add(Image::from_bytes(image.id.to_string(), image.buf.to_vec()));
