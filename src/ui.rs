@@ -22,7 +22,7 @@ use nanoid::nanoid;
 use parking_lot::RwLock;
 use rfd::FileDialog;
 use windows::Win32::UI::{
-    Input::KeyboardAndMouse::{GetAsyncKeyState, VK_1, VK_2},
+    Input::KeyboardAndMouse::{GetAsyncKeyState, VK_F1, VK_F2},
     WindowsAndMessaging::{GetSystemMetrics, SM_CXSCREEN, SM_CYSCREEN},
 };
 
@@ -247,7 +247,7 @@ impl Draw for Panel {
             ui.add(Image::from_bytes(image.id.to_string(), image.buf.to_vec()));
         }
 
-        if is_pressed(VK_1.0) {
+        if is_pressed(VK_F1.0) {
             match STATE.load() {
                 State::Stop => {
                     if !DRAWING.load() {
@@ -257,7 +257,7 @@ impl Draw for Panel {
                 State::Drawing => {}
             }
         }
-        if is_pressed(VK_2.0) {
+        if is_pressed(VK_F2.0) {
             STATE.store(State::Stop);
         }
     }
