@@ -7,7 +7,7 @@ use std::{
 
 use crossbeam::atomic::AtomicCell;
 use eframe::{
-    egui::{self, Image, Ui},
+    egui::{self, Image},
     App,
 };
 use enigo::{Enigo, Mouse, Settings};
@@ -33,10 +33,6 @@ pub static SCREEN: LazyLock<(i32, i32)> =
 pub enum State {
     Drawing,
     Stop,
-}
-
-pub trait Draw {
-    fn ui(&mut self, ui: &mut Ui);
 }
 
 #[derive(Debug, Clone)]
@@ -253,64 +249,63 @@ impl Panel {
     }
 }
 
-impl Draw for Panel {
-    fn ui(&mut self, ui: &mut Ui) {
-        ui.horizontal(|ui| {
-            if ui.button("Select Image").clicked() {
-                self.open_image();
-            }
-            if ui
-                .add(
-                    egui::DragValue::new(&mut self.canny_value)
-                        .range(1..=u32::MAX)
-                        .prefix("low threshold: "),
-                )
-                .changed()
-            {
-                self.reload(false);
-            }
-            if ui
-                .add(
-                    egui::DragValue::new(&mut self.area)
-                        .range(0..=100)
-                        .prefix("Drawing area: ")
-                        .custom_formatter(|n, _| format!("{n}%")),
-                )
-                .changed()
-            {
-                self.reload(true);
-            }
-        });
-        ui.separator();
-
-        ui.label("Press F1 to start draw");
-        ui.label("Press F2 to stop draw");
-        ui.separator();
-
-        if let Some(image) = self.canny_image.read().as_ref() {
-            ui.add(Image::from_bytes(image.id.to_string(), image.buf.to_vec()));
-        }
-
-        if is_pressed(VK_F1.0) {
-            match STATE.load() {
-                State::Stop => {
-                    if !DRAWING.load() {
-                        self.draw();
-                    }
-                }
-                State::Drawing => {}
-            }
-        }
-        if is_pressed(VK_F2.0) {
-            STATE.store(State::Stop);
-        }
-    }
-}
-
 impl App for Panel {
     fn update(&mut self, ctx: &eframe::egui::Context, _frame: &mut eframe::Frame) {
         ctx.request_repaint();
-        egui::CentralPanel::default().show(ctx, |ui| self.ui(ui));
+        egui::CentralPanel::default().show(ctx, |ui| {
+            ui.horizontal(|ui| {
+                if ui.button("Select Image").clicked() {
+                    ctx.forget_all_images();
+                    self.open_image();
+                }
+                if ui
+                    .add(
+                        egui::DragValue::new(&mut self.canny_value)
+                            .range(1..=u32::MAX)
+                            .prefix("low threshold: "),
+                    )
+                    .changed()
+                {
+                    ctx.forget_all_images();
+                    self.reload(false);
+                }
+                if ui
+                    .add(
+                        egui::DragValue::new(&mut self.area)
+                            .range(0..=100)
+                            .prefix("Drawing area: ")
+                            .custom_formatter(|n, _| format!("{n}%")),
+                    )
+                    .changed()
+                {
+                    ctx.forget_all_images();
+                    self.reload(true);
+                }
+            });
+            ui.separator();
+
+            ui.label("Press F1 to start draw");
+            ui.label("Press F2 to stop draw");
+            ui.separator();
+
+            if let Some(image) = self.canny_image.read().as_ref() {
+                ui.add(Image::from_bytes(image.id.to_string(), image.buf.to_vec()));
+            }
+
+            if is_pressed(VK_F1.0) {
+                match STATE.load() {
+                    State::Stop => {
+                        if !DRAWING.load() {
+                            self.draw();
+                        }
+                    }
+                    State::Drawing => {}
+                }
+            }
+            if is_pressed(VK_F2.0) {
+                STATE.store(State::Stop);
+            }
+        });
     }
 }
 
