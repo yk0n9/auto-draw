@@ -42,6 +42,8 @@ pub trait Draw {
 
 #[derive(Debug, Clone)]
 pub struct Panel {
+    pub center: Arc<RwLock<(i32, i32)>>,
+    pub range: f32,
     pub canny_value: u32,
     pub canny_image: Arc<RwLock<Option<Img>>>,
     pub raw_image: Arc<RwLock<Option<DynamicImage>>>,
@@ -57,6 +59,8 @@ pub struct Img {
 impl Default for Panel {
     fn default() -> Self {
         Self {
+            center: Arc::new(RwLock::new((0, 0))),
+            range: 0.75,
             canny_value: 25,
             canny_image: Arc::new(RwLock::new(None)),
             raw_image: Arc::new(RwLock::new(None)),
@@ -67,6 +71,8 @@ impl Default for Panel {
 
 impl Panel {
     fn open_image(&self) {
+        let image_center = self.center.clone();
+        let range = self.range;
         let canny_value = self.canny_value;
         let canny_image = self.canny_image.clone();
         let lines = self.lines.clone();
@@ -84,21 +90,25 @@ impl Panel {
             };
             let dim = image.dimensions();
 
-            let center = (SCREEN.0 / 4, SCREEN.1 / 4);
+            let r = (
+                (SCREEN.0 as f32 * range) as i32,
+                (SCREEN.1 as f32 * range) as i32,
+            );
 
-            if dim.0 > (SCREEN.0 / 2) as _ && dim.0 >= dim.1 {
-                image = image.resize(
-                    (SCREEN.0 / 2) as _,
-                    (SCREEN.1 / 2) as _,
-                    FilterType::Lanczos3,
-                );
-            } else if dim.1 > (SCREEN.1 / 2) as _ && dim.1 >= dim.0 {
-                image = image.resize(
-                    ((SCREEN.1 / 2).pow(2) / (SCREEN.0 / 2)) as _,
-                    (SCREEN.1 / 2) as _,
-                    FilterType::Lanczos3,
-                );
+            let rect = if dim.0 >= dim.1 {
+                (r.0, r.0)
+            } else {
+                ((r.1 as f32 * range) as _, (r.1 as f32 * range) as _)
+            };
+
+            if dim.0 > rect.0 as _ || dim.1 > rect.1 as _ {
+                image = image.resize(rect.0 as _, rect.1 as _, FilterType::Lanczos3);
             }
+            let center = (
+                (SCREEN.0 - image.width() as i32) / 2,
+                (SCREEN.1 - image.height() as i32) / 2,
+            );
+            *image_center.write() = center;
 
             let gray = image.to_luma8();
             raw_image.write().replace(image);
@@ -127,6 +137,7 @@ impl Panel {
         let Some(raw_image) = raw_image.as_ref() else {
             return;
         };
+        let center = *self.center.read();
         let image = raw_image.to_luma8();
         let canny = edges::canny(
             &image,
@@ -140,7 +151,6 @@ impl Panel {
             buf: data.into_inner(),
         });
 
-        let center = (SCREEN.0 / 4, SCREEN.1 / 4);
         let mut contours = contours::find_contours(&canny);
         contours.iter_mut().for_each(|contour| {
             contour.points.iter_mut().for_each(|point| {
