@@ -1,6 +1,5 @@
 use std::{
     io::Cursor,
-    ops::RangeInclusive,
     sync::{Arc, LazyLock},
     thread,
     time::Duration,
@@ -43,10 +42,11 @@ pub trait Draw {
 #[derive(Debug, Clone)]
 pub struct Panel {
     pub center: Arc<RwLock<(i32, i32)>>,
-    pub range: f32,
+    pub area: u32,
     pub canny_value: u32,
     pub canny_image: Arc<RwLock<Option<Img>>>,
-    pub raw_image: Arc<RwLock<Option<DynamicImage>>>,
+    pub resized_img: Arc<RwLock<Option<DynamicImage>>>,
+    pub raw_img: Arc<RwLock<Option<DynamicImage>>>,
     pub lines: Arc<RwLock<Option<Vec<Contour<i32>>>>>,
 }
 
@@ -60,10 +60,11 @@ impl Default for Panel {
     fn default() -> Self {
         Self {
             center: Arc::new(RwLock::new((0, 0))),
-            range: 0.75,
+            area: 70,
             canny_value: 25,
             canny_image: Arc::new(RwLock::new(None)),
-            raw_image: Arc::new(RwLock::new(None)),
+            resized_img: Arc::new(RwLock::new(None)),
+            raw_img: Arc::new(RwLock::new(None)),
             lines: Arc::new(RwLock::new(None)),
         }
     }
@@ -72,11 +73,12 @@ impl Default for Panel {
 impl Panel {
     fn open_image(&self) {
         let image_center = self.center.clone();
-        let range = self.range;
+        let area = self.area;
         let canny_value = self.canny_value;
         let canny_image = self.canny_image.clone();
         let lines = self.lines.clone();
-        let raw_image = self.raw_image.clone();
+        let resized_img = self.resized_img.clone();
+        let raw_img = self.raw_img.clone();
         rayon::spawn(move || {
             let Some(path) = FileDialog::new()
                 .add_filter("Image", &["jpg", "jpeg", "png"])
@@ -88,17 +90,19 @@ impl Panel {
             let Ok(mut image) = image::open(&path) else {
                 return;
             };
+            raw_img.write().replace(image.clone());
+
             let dim = image.dimensions();
 
             let r = (
-                (SCREEN.0 as f32 * range) as i32,
-                (SCREEN.1 as f32 * range) as i32,
+                (SCREEN.0 as f32 * (area as f32 / 100.0)) as i32,
+                (SCREEN.1 as f32 * (area as f32 / 100.0)) as i32,
             );
 
             let rect = if dim.0 >= dim.1 {
                 (r.0, r.0)
             } else {
-                ((r.1 as f32 * range) as _, (r.1 as f32 * range) as _)
+                (r.1, r.1)
             };
 
             if dim.0 > rect.0 as _ || dim.1 > rect.1 as _ {
@@ -111,7 +115,7 @@ impl Panel {
             *image_center.write() = center;
 
             let gray = image.to_luma8();
-            raw_image.write().replace(image);
+            resized_img.write().replace(image);
 
             let canny = edges::canny(&gray, canny_value as f32, 3.0 * canny_value as f32);
             let mut data = Cursor::new(vec![]);
@@ -132,13 +136,47 @@ impl Panel {
         });
     }
 
-    fn reload(&self) {
-        let raw_image = self.raw_image.read();
-        let Some(raw_image) = raw_image.as_ref() else {
+    fn resize(&self, mut image: DynamicImage) -> (i32, i32) {
+        let dim = image.dimensions();
+
+        let r = (
+            (SCREEN.0 as f32 * (self.area as f32 / 100.0)) as i32,
+            (SCREEN.1 as f32 * (self.area as f32 / 100.0)) as i32,
+        );
+
+        let rect = if dim.0 >= dim.1 {
+            (r.0, r.0)
+        } else {
+            (r.1, r.1)
+        };
+
+        if dim.0 > rect.0 as _ || dim.1 > rect.1 as _ {
+            image = image.resize(rect.0 as _, rect.1 as _, FilterType::Lanczos3);
+        }
+        let center = (
+            (SCREEN.0 - image.width() as i32) / 2,
+            (SCREEN.1 - image.height() as i32) / 2,
+        );
+
+        self.resized_img.write().replace(image);
+        center
+    }
+
+    fn reload(&self, area: bool) {
+        if area {
+            let raw_img = self.raw_img.read();
+            let Some(image) = raw_img.as_ref() else {
+                return;
+            };
+            *self.center.write() = self.resize(image.clone());
+        }
+
+        let resized_img = self.resized_img.read();
+        let Some(resized_img) = resized_img.as_ref() else {
             return;
         };
         let center = *self.center.read();
-        let image = raw_image.to_luma8();
+        let image = resized_img.to_luma8();
         let canny = edges::canny(
             &image,
             self.canny_value as f32,
@@ -224,15 +262,27 @@ impl Draw for Panel {
             if ui
                 .add(
                     egui::DragValue::new(&mut self.canny_value)
-                        .range(RangeInclusive::new(1, u32::MAX))
+                        .range(1..=u32::MAX)
                         .prefix("low threshold: "),
                 )
                 .changed()
             {
-                self.reload();
+                self.reload(false);
+            }
+            if ui
+                .add(
+                    egui::DragValue::new(&mut self.area)
+                        .range(0..=100)
+                        .prefix("Drawing area: ")
+                        .custom_formatter(|n, _| format!("{n}%")),
+                )
+                .changed()
+            {
+                self.reload(true);
             }
         });
         ui.separator();
+
         ui.label("Press F1 to start draw");
         ui.label("Press F2 to stop draw");
         ui.separator();
