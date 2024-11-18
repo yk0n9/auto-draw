@@ -1,7 +1,6 @@
 use std::{
     io::Cursor,
     ops::RangeInclusive,
-    path::PathBuf,
     sync::{Arc, LazyLock},
     thread,
     time::Duration,
@@ -13,7 +12,7 @@ use eframe::{
     App,
 };
 use enigo::{Enigo, Mouse, Settings};
-use image::{imageops::FilterType, GenericImageView};
+use image::{imageops::FilterType, DynamicImage, GenericImageView};
 use imageproc::{
     contours::{self, Contour},
     edges,
@@ -45,8 +44,8 @@ pub trait Draw {
 pub struct Panel {
     pub canny_value: u32,
     pub canny_image: Arc<RwLock<Option<Img>>>,
+    pub raw_image: Arc<RwLock<Option<DynamicImage>>>,
     pub lines: Arc<RwLock<Option<Vec<Contour<i32>>>>>,
-    pub path: Arc<RwLock<Option<PathBuf>>>,
 }
 
 #[derive(Debug, Clone)]
@@ -60,8 +59,8 @@ impl Default for Panel {
         Self {
             canny_value: 25,
             canny_image: Arc::new(RwLock::new(None)),
+            raw_image: Arc::new(RwLock::new(None)),
             lines: Arc::new(RwLock::new(None)),
-            path: Arc::new(RwLock::new(None)),
         }
     }
 }
@@ -71,7 +70,7 @@ impl Panel {
         let canny_value = self.canny_value;
         let canny_image = self.canny_image.clone();
         let lines = self.lines.clone();
-        let image_path = self.path.clone();
+        let raw_image = self.raw_image.clone();
         rayon::spawn(move || {
             let Some(path) = FileDialog::new()
                 .add_filter("Image", &["jpg", "jpeg", "png"])
@@ -79,7 +78,6 @@ impl Panel {
             else {
                 return;
             };
-            image_path.write().replace(path.to_path_buf());
 
             let Ok(mut image) = image::open(&path) else {
                 return;
@@ -102,8 +100,10 @@ impl Panel {
                 );
             }
 
-            let image = image.to_luma8();
-            let canny = edges::canny(&image, canny_value as f32, 3.0 * canny_value as f32);
+            let gray = image.to_luma8();
+            raw_image.write().replace(image);
+
+            let canny = edges::canny(&gray, canny_value as f32, 3.0 * canny_value as f32);
             let mut data = Cursor::new(vec![]);
             canny.write_to(&mut data, image::ImageFormat::Png).ok();
             canny_image.write().replace(Img {
@@ -123,32 +123,11 @@ impl Panel {
     }
 
     fn reload(&self) {
-        let path = self.path.read();
-        let Some(path) = path.as_ref() else {
+        let raw_image = self.raw_image.read();
+        let Some(raw_image) = raw_image.as_ref() else {
             return;
         };
-        let Ok(mut image) = image::open(path) else {
-            return;
-        };
-        let dim = image.dimensions();
-
-        let center = (SCREEN.0 / 4, SCREEN.1 / 4);
-
-        if dim.0 > (SCREEN.0 / 2) as _ && dim.0 >= dim.1 {
-            image = image.resize(
-                (SCREEN.0 / 2) as _,
-                (SCREEN.1 / 2) as _,
-                FilterType::Lanczos3,
-            );
-        } else if dim.1 > (SCREEN.1 / 2) as _ && dim.1 >= dim.0 {
-            image = image.resize(
-                ((SCREEN.1 / 2).pow(2) / (SCREEN.0 / 2)) as _,
-                (SCREEN.1 / 2) as _,
-                FilterType::Lanczos3,
-            );
-        }
-
-        let image = image.to_luma8();
+        let image = raw_image.to_luma8();
         let canny = edges::canny(
             &image,
             self.canny_value as f32,
@@ -161,6 +140,7 @@ impl Panel {
             buf: data.into_inner(),
         });
 
+        let center = (SCREEN.0 / 4, SCREEN.1 / 4);
         let mut contours = contours::find_contours(&canny);
         contours.iter_mut().for_each(|contour| {
             contour.points.iter_mut().for_each(|point| {
@@ -234,7 +214,8 @@ impl Draw for Panel {
             if ui
                 .add(
                     egui::DragValue::new(&mut self.canny_value)
-                        .range(RangeInclusive::new(1, u32::MAX)),
+                        .range(RangeInclusive::new(1, u32::MAX))
+                        .prefix("low threshold: "),
                 )
                 .changed()
             {
