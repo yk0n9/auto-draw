@@ -95,7 +95,7 @@ impl Panel {
                 (SCREEN.1 as f32 * (area as f32 / 100.0)) as i32,
             );
 
-            let rect = if dim.0 > dim.1 {
+            let rect = if (dim.1 as f32 / dim.0 as f32) < 0.7 {
                 (r.0, r.0)
             } else {
                 (r.1, r.1)
@@ -140,7 +140,7 @@ impl Panel {
             (SCREEN.1 as f32 * (self.area as f32 / 100.0)) as i32,
         );
 
-        let rect = if dim.0 > dim.1 {
+        let rect = if (dim.1 as f32 / dim.0 as f32) < 0.7 {
             (r.0, r.0)
         } else {
             (r.1, r.1)
