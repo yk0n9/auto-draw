@@ -77,13 +77,24 @@ impl Panel {
         let raw_img = self.raw_img.clone();
         rayon::spawn(move || {
             let Some(path) = FileDialog::new()
-                .add_filter("Image", &["jpg", "jpeg", "png"])
+                .add_filter(
+                    "Image file",
+                    &[
+                        "avif", "jpg", "jpeg", "jfif", "png", "apng", "gif", "webp", "tif", "tiff",
+                        "tga", "dds", "bmp", "ico", "hdr", "exr", "pdm", "pam", "ppm", "pgm", "ff",
+                        "qoi", "pcx",
+                    ],
+                )
                 .pick_file()
             else {
                 return;
             };
 
             let Ok(mut image) = image::open(&path) else {
+                rfd::MessageDialog::new()
+                    .set_title("Error")
+                    .set_description("No image")
+                    .show();
                 return;
             };
             raw_img.write().replace(image.clone());
@@ -262,7 +273,7 @@ impl App for Panel {
                     .add(
                         egui::DragValue::new(&mut self.canny_value)
                             .range(1..=u32::MAX)
-                            .prefix("low threshold: "),
+                            .prefix("Low threshold: "),
                     )
                     .changed()
                 {
