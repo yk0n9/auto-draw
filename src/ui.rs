@@ -107,14 +107,12 @@ impl Panel {
             );
 
             let rect = if (dim.1 as f32 / dim.0 as f32) < (2.0 / 3.0) {
-                (r.0, r.0)
+                r.0
             } else {
-                (r.1, r.1)
+                r.1
             };
 
-            if dim.0 > rect.0 as _ || dim.1 > rect.1 as _ {
-                image = image.resize(rect.0 as _, rect.1 as _, FilterType::Lanczos3);
-            }
+            image = image.resize(rect as _, rect as _, FilterType::Lanczos3);
             let center = (
                 (SCREEN.0 - image.width() as i32) / 2,
                 (SCREEN.1 - image.height() as i32) / 2,
@@ -152,14 +150,12 @@ impl Panel {
         );
 
         let rect = if (dim.1 as f32 / dim.0 as f32) < (2.0 / 3.0) {
-            (r.0, r.0)
+            r.0
         } else {
-            (r.1, r.1)
+            r.1
         };
 
-        if dim.0 > rect.0 as _ || dim.1 > rect.1 as _ {
-            image = image.resize(rect.0 as _, rect.1 as _, FilterType::Lanczos3);
-        }
+        image = image.resize(rect as _, rect as _, FilterType::Lanczos3);
         let center = (
             (SCREEN.0 - image.width() as i32) / 2,
             (SCREEN.1 - image.height() as i32) / 2,
