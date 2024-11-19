@@ -323,6 +323,7 @@ impl App for Panel {
                     return;
                 };
                 self.raw_img.write().replace(raw_image);
+                ctx.forget_all_images();
                 self.reload(true);
             }
         });
