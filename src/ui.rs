@@ -13,7 +13,7 @@ use eframe::{
 use enigo::{Enigo, Mouse, Settings};
 use image::{imageops::FilterType, DynamicImage, GenericImageView};
 use imageproc::{
-    contours::{self, Contour},
+    contours::{self, BorderType, Contour},
     edges,
 };
 use nanoid::nanoid;
@@ -223,6 +223,9 @@ impl Panel {
                     break;
                 }
                 if contour.points.len() < 2 {
+                    continue;
+                }
+                if let BorderType::Hole = contour.border_type {
                     continue;
                 }
 
