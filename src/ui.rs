@@ -226,7 +226,7 @@ impl Panel {
                         .ok();
                     break;
                 }
-                if contour.points.is_empty() {
+                if contour.points.len() < 2 {
                     continue;
                 }
 
