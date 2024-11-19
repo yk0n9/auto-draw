@@ -4,6 +4,7 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
+arboard = "3"
 crossbeam = "0.8"
 eframe = "0.29"
 egui_extras = { version = "0.29", features = ["all_loaders"] }

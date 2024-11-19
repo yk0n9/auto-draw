@@ -1,10 +1,12 @@
 use std::{
+    error::Error,
     io::Cursor,
     sync::{Arc, LazyLock},
     thread,
     time::Duration,
 };
 
+use arboard::Clipboard;
 use crossbeam::atomic::AtomicCell;
 use eframe::{
     egui::{self, Image},
@@ -264,7 +266,7 @@ impl App for Panel {
         ctx.request_repaint();
         egui::CentralPanel::default().show(ctx, |ui| {
             ui.horizontal(|ui| {
-                if ui.button("Select Image").clicked() {
+                if ui.button("Open image...").clicked() {
                     ctx.forget_all_images();
                     self.open_image();
                 }
@@ -315,6 +317,14 @@ impl App for Panel {
             if is_pressed(VK_F2.0) {
                 STATE.store(State::Stop);
             }
+
+            if ctx.input(|i| i.modifiers.ctrl && i.key_released(egui::Key::V)) {
+                let Some(raw_image) = load_image_from_clipboard().ok() else {
+                    return;
+                };
+                self.raw_img.write().replace(raw_image);
+                self.reload(true);
+            }
         });
     }
 }
@@ -322,4 +332,18 @@ impl App for Panel {
 pub fn is_pressed(vk: u16) -> bool {
     let status = unsafe { GetAsyncKeyState(vk as i32) as u32 };
     status >> 31 == 1
+}
+
+fn load_image_from_clipboard() -> Result<DynamicImage, Box<dyn Error>> {
+    let mut clipboard = Clipboard::new()?;
+    if let Some(image) = clipboard.get_image().ok() {
+        let Some(image) =
+            image::RgbaImage::from_vec(image.width as _, image.height as _, image.bytes.to_vec())
+        else {
+            return Err("No image data found in clipboard".into());
+        };
+
+        return Ok(image::DynamicImage::ImageRgba8(image));
+    }
+    Err("No image data found in clipboard".into())
 }
