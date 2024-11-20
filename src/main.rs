@@ -11,7 +11,7 @@ fn main() {
         ..Default::default()
     };
     eframe::run_native(
-        "Image",
+        "AutoDraw",
         options,
         Box::new(|cc| {
             egui_extras::install_image_loaders(&cc.egui_ctx);
