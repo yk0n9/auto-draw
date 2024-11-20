@@ -337,14 +337,14 @@ pub fn is_pressed(vk: u16) -> bool {
 
 fn load_image_from_clipboard() -> Result<DynamicImage, Box<dyn Error>> {
     let mut clipboard = Clipboard::new()?;
-    if let Ok(image) = clipboard.get_image() {
-        let Some(image) =
-            image::RgbaImage::from_vec(image.width as _, image.height as _, image.bytes.to_vec())
-        else {
-            return Err("No image data found in clipboard".into());
-        };
+    let image = clipboard.get_image()?;
+    let Some(image) = image::RgbaImage::from_vec(
+        image.width as _,
+        image.height as _,
+        image.bytes.into_owned(),
+    ) else {
+        return Err("Parse image data fail".into());
+    };
 
-        return Ok(image::DynamicImage::ImageRgba8(image));
-    }
-    Err("No image data found in clipboard".into())
+    Ok(image::DynamicImage::ImageRgba8(image))
 }
