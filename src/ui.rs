@@ -337,7 +337,7 @@ pub fn is_pressed(vk: u16) -> bool {
 
 fn load_image_from_clipboard() -> Result<DynamicImage, Box<dyn Error>> {
     let mut clipboard = Clipboard::new()?;
-    if let Some(image) = clipboard.get_image().ok() {
+    if let Ok(image) = clipboard.get_image() {
         let Some(image) =
             image::RgbaImage::from_vec(image.width as _, image.height as _, image.bytes.to_vec())
         else {
