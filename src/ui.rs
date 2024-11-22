@@ -224,10 +224,7 @@ impl Panel {
                         .ok();
                     break;
                 }
-                if contour.points.len() < 2 {
-                    continue;
-                }
-                if let BorderType::Hole = contour.border_type {
+                if contour.points.len() < 2 || matches!(contour.border_type, BorderType::Hole) {
                     continue;
                 }
 
