@@ -232,17 +232,17 @@ impl Panel {
                     enigo
                         .move_mouse(point.x, point.y, enigo::Coordinate::Abs)
                         .ok();
-                    thread::sleep(Duration::from_micros(100));
                     if index == 0 {
                         enigo
                             .button(enigo::Button::Left, enigo::Direction::Press)
                             .ok();
                     }
+                    thread::sleep(Duration::from_micros(100));
                 }
-                thread::sleep(Duration::from_millis(100));
                 enigo
                     .button(enigo::Button::Left, enigo::Direction::Release)
                     .ok();
+                thread::sleep(Duration::from_millis(100));
             }
             STATE.store(State::Stop);
             DRAWING.store(false);
