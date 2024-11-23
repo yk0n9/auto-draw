@@ -15,7 +15,7 @@ use eframe::{
 use enigo::{Enigo, Mouse, Settings};
 use image::{imageops::FilterType, DynamicImage, GenericImageView};
 use imageproc::{
-    contours::{self, BorderType, Contour},
+    contours::{self, Contour},
     edges,
 };
 use nanoid::nanoid;
@@ -181,9 +181,9 @@ impl Panel {
             return;
         };
         let center = *self.center.read();
-        let image = resized_img.to_luma8();
+        let gray = resized_img.to_luma8();
         let canny = edges::canny(
-            &image,
+            &gray,
             self.canny_value as f32,
             3.0 * self.canny_value as f32,
         );
@@ -224,21 +224,8 @@ impl Panel {
                         .ok();
                     break;
                 }
-                if contour.points.len() < 2 || matches!(contour.border_type, BorderType::Hole) {
-                    continue;
-                }
 
-                enigo
-                    .move_mouse(
-                        contour.points[0].x,
-                        contour.points[0].y,
-                        enigo::Coordinate::Abs,
-                    )
-                    .ok();
-                enigo
-                    .button(enigo::Button::Left, enigo::Direction::Press)
-                    .ok();
-                for point in &contour.points[1..] {
+                for (index, point) in contour.points.iter().enumerate() {
                     if let State::Stop = STATE.load() {
                         break;
                     }
@@ -246,11 +233,16 @@ impl Panel {
                         .move_mouse(point.x, point.y, enigo::Coordinate::Abs)
                         .ok();
                     thread::sleep(Duration::from_micros(100));
+                    if index == 0 {
+                        enigo
+                            .button(enigo::Button::Left, enigo::Direction::Press)
+                            .ok();
+                    }
                 }
+                thread::sleep(Duration::from_millis(100));
                 enigo
                     .button(enigo::Button::Left, enigo::Direction::Release)
                     .ok();
-                thread::sleep(Duration::from_millis(100));
             }
             STATE.store(State::Stop);
             DRAWING.store(false);
