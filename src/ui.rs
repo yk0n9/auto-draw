@@ -1,6 +1,7 @@
 use std::{
     error::Error,
     io::Cursor,
+    ops::Deref,
     sync::{Arc, LazyLock},
     thread,
     time::Duration,
@@ -9,8 +10,8 @@ use std::{
 use arboard::Clipboard;
 use crossbeam::atomic::AtomicCell;
 use eframe::{
-    egui::{self, Image},
-    App,
+    egui::{self, FontFamily::Proportional, FontId, Image, TextStyle::*},
+    App, CreationContext,
 };
 use enigo::{Enigo, Mouse, Settings};
 use image::{imageops::FilterType, DynamicImage, GenericImageView};
@@ -21,10 +22,13 @@ use imageproc::{
 use nanoid::nanoid;
 use parking_lot::RwLock;
 use rfd::FileDialog;
+use rust_i18n::t;
 use windows::Win32::UI::{
     Input::KeyboardAndMouse::{GetAsyncKeyState, VK_F1, VK_F2},
     WindowsAndMessaging::{GetSystemMetrics, SM_CXSCREEN, SM_CYSCREEN},
 };
+
+use crate::font::load_fonts;
 
 pub static STATE: AtomicCell<State> = AtomicCell::new(State::Stop);
 pub static DRAWING: AtomicCell<bool> = AtomicCell::new(false);
@@ -37,6 +41,12 @@ pub enum State {
     Stop,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Language {
+    Chinese,
+    English,
+}
+
 #[derive(Debug, Clone)]
 pub struct Panel {
     pub center: Arc<RwLock<(i32, i32)>>,
@@ -46,6 +56,8 @@ pub struct Panel {
     pub resized_img: Arc<RwLock<Option<DynamicImage>>>,
     pub raw_img: Arc<RwLock<Option<DynamicImage>>>,
     pub lines: Arc<RwLock<Option<Vec<Contour<i32>>>>>,
+    pub point_count: usize,
+    pub language: Language,
 }
 
 #[derive(Debug, Clone)]
@@ -64,11 +76,30 @@ impl Default for Panel {
             resized_img: Arc::new(RwLock::new(None)),
             raw_img: Arc::new(RwLock::new(None)),
             lines: Arc::new(RwLock::new(None)),
+            point_count: 10,
+            language: Language::Chinese,
         }
     }
 }
 
 impl Panel {
+    pub fn new(cc: &CreationContext) -> Box<Self> {
+        load_fonts(&cc.egui_ctx);
+        let mut style = cc.egui_ctx.style().deref().clone();
+        style.text_styles = [
+            (Heading, FontId::new(20.0, Proportional)),
+            (Name("Heading2".into()), FontId::new(25.0, Proportional)),
+            (Name("Context".into()), FontId::new(23.0, Proportional)),
+            (Body, FontId::new(18.0, Proportional)),
+            (Monospace, FontId::new(14.0, Proportional)),
+            (Button, FontId::new(14.0, Proportional)),
+            (Small, FontId::new(10.0, Proportional)),
+        ]
+        .into();
+        cc.egui_ctx.set_style(style);
+        Box::new(Panel::default())
+    }
+
     fn open_image(&self) {
         let image_center = self.center.clone();
         let area = self.area;
@@ -206,6 +237,7 @@ impl Panel {
 
     fn draw(&self) {
         let contours = self.lines.clone();
+        let point_count = self.point_count;
         rayon::spawn(move || {
             STATE.store(State::Drawing);
             DRAWING.store(true);
@@ -223,6 +255,9 @@ impl Panel {
                         .button(enigo::Button::Left, enigo::Direction::Release)
                         .ok();
                     break;
+                }
+                if contour.points.len() <= point_count {
+                    continue;
                 }
 
                 for (index, point) in contour.points.iter().enumerate() {
@@ -255,15 +290,31 @@ impl App for Panel {
         ctx.request_repaint();
         egui::CentralPanel::default().show(ctx, |ui| {
             ui.horizontal(|ui| {
-                if ui.button("Open image...").clicked() {
+                if ui.button(t!("open_image")).clicked() {
                     ctx.forget_all_images();
                     self.open_image();
                 }
                 if ui
+                    .selectable_value(&mut self.language, Language::Chinese, "简体中文")
+                    .clicked()
+                {
+                    rust_i18n::set_locale("zh-CN");
+                }
+                if ui
+                    .selectable_value(&mut self.language, Language::English, "English")
+                    .clicked()
+                {
+                    rust_i18n::set_locale("en-US");
+                }
+            });
+            ui.separator();
+
+            ui.horizontal(|ui| {
+                if ui
                     .add(
                         egui::DragValue::new(&mut self.canny_value)
                             .range(1..=u32::MAX)
-                            .prefix("Low threshold: "),
+                            .prefix(t!("low_threshold")),
                     )
                     .changed()
                 {
@@ -274,7 +325,7 @@ impl App for Panel {
                     .add(
                         egui::DragValue::new(&mut self.area)
                             .range(0..=100)
-                            .prefix("Drawing area: ")
+                            .prefix(t!("draw_area"))
                             .custom_formatter(|n, _| format!("{n}%")),
                     )
                     .changed()
@@ -282,26 +333,24 @@ impl App for Panel {
                     ctx.forget_all_images();
                     self.reload(true);
                 }
+                ui.add(
+                    egui::DragValue::new(&mut self.point_count)
+                        .range(0..=usize::MAX)
+                        .prefix(t!("pass_points")),
+                );
             });
             ui.separator();
 
-            ui.label("Press F1 to start draw");
-            ui.label("Press F2 to stop draw");
+            ui.label(t!("start"));
+            ui.label(t!("stop"));
             ui.separator();
 
             if let Some(image) = self.canny_image.read().as_ref() {
                 ui.add(Image::from_bytes(image.id.to_string(), image.buf.to_vec()));
             }
 
-            if is_pressed(VK_F1.0) {
-                match STATE.load() {
-                    State::Stop => {
-                        if !DRAWING.load() {
-                            self.draw();
-                        }
-                    }
-                    State::Drawing => {}
-                }
+            if is_pressed(VK_F1.0) && matches!(STATE.load(), State::Stop) && !DRAWING.load() {
+                self.draw();
             }
             if is_pressed(VK_F2.0) {
                 STATE.store(State::Stop);

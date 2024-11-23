@@ -9,12 +9,14 @@ crossbeam = "0.8"
 eframe = "0.29"
 egui_extras = { version = "0.29", features = ["all_loaders"] }
 enigo = "0.3"
+font-kit = "0.14"
 image = "0.25"
 imageproc = "0.25"
 nanoid = "0.4"
 parking_lot = "0.12"
 rayon = "1"
 rfd = "0.15"
+rust-i18n = "3"
 windows = { version = "0.58", features = ["Win32_UI_WindowsAndMessaging"] }
 
 [profile.release]

@@ -1,0 +1,6 @@
+open_image: "Open iamge..."
+low_threshold: "Low threshold: "
+draw_area: "Draw area: "
+pass_points: "Pass points less: "
+start: "Press F1 to start draw"
+stop: "Press F2 to stop draw"
