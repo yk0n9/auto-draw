@@ -58,6 +58,7 @@ pub struct Panel {
     pub lines: Arc<RwLock<Option<Vec<Contour<i32>>>>>,
     pub point_count: usize,
     pub language: Language,
+    pub is_binary: bool,
 }
 
 #[derive(Debug, Clone)]
@@ -78,6 +79,7 @@ impl Default for Panel {
             lines: Arc::new(RwLock::new(None)),
             point_count: 10,
             language: Language::Chinese,
+            is_binary: false,
         }
     }
 }
@@ -108,6 +110,7 @@ impl Panel {
         let lines = self.lines.clone();
         let resized_img = self.resized_img.clone();
         let raw_img = self.raw_img.clone();
+        let is_binary = self.is_binary;
         rayon::spawn(move || {
             let Some(path) = FileDialog::new()
                 .add_filter(
@@ -155,15 +158,20 @@ impl Panel {
             let gray = image.to_luma8();
             resized_img.write().replace(image);
 
-            let canny = edges::canny(&gray, canny_value as f32, 3.0 * canny_value as f32);
             let mut data = Cursor::new(vec![]);
-            canny.write_to(&mut data, image::ImageFormat::Png).ok();
+            let mut contours = if !is_binary {
+                let canny = edges::canny(&gray, canny_value as f32, 3.0 * canny_value as f32);
+                canny.write_to(&mut data, image::ImageFormat::Png).ok();
+                contours::find_contours(&canny)
+            } else {
+                gray.write_to(&mut data, image::ImageFormat::Png).ok();
+                contours::find_contours(&gray)
+            };
             canny_image.write().replace(Img {
                 id: nanoid!(),
                 buf: data.into_inner(),
             });
 
-            let mut contours = contours::find_contours(&canny);
             contours.iter_mut().for_each(|contour| {
                 contour.points.iter_mut().for_each(|point| {
                     point.x += center.0;
@@ -213,19 +221,25 @@ impl Panel {
         };
         let center = *self.center.read();
         let gray = resized_img.to_luma8();
-        let canny = edges::canny(
-            &gray,
-            self.canny_value as f32,
-            3.0 * self.canny_value as f32,
-        );
+
         let mut data = Cursor::new(vec![]);
-        canny.write_to(&mut data, image::ImageFormat::Png).ok();
+        let mut contours = if !self.is_binary {
+            let canny = edges::canny(
+                &gray,
+                self.canny_value as f32,
+                3.0 * self.canny_value as f32,
+            );
+            canny.write_to(&mut data, image::ImageFormat::Png).ok();
+            contours::find_contours(&canny)
+        } else {
+            gray.write_to(&mut data, image::ImageFormat::Png).ok();
+            contours::find_contours(&gray)
+        };
         self.canny_image.write().replace(Img {
             id: nanoid!(),
             buf: data.into_inner(),
         });
 
-        let mut contours = contours::find_contours(&canny);
         contours.iter_mut().for_each(|contour| {
             contour.points.iter_mut().for_each(|point| {
                 point.x += center.0;
@@ -338,6 +352,10 @@ impl App for Panel {
                         .range(0..=usize::MAX)
                         .prefix(t!("pass_points")),
                 );
+                if ui.checkbox(&mut self.is_binary, t!("is_binary")).changed() {
+                    ctx.forget_all_images();
+                    self.reload(false);
+                }
             });
             ui.separator();
 
