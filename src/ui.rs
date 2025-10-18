@@ -14,7 +14,7 @@ use eframe::{
     App, CreationContext,
 };
 use enigo::{Enigo, Mouse, Settings};
-use image::{imageops::FilterType, DynamicImage, GenericImageView};
+use image::{imageops::FilterType, DynamicImage};
 use imageproc::{
     contours::{self, Contour},
     edges,
@@ -135,20 +135,12 @@ impl Panel {
             };
             raw_img.write().replace(image.clone());
 
-            let dim = image.dimensions();
-
             let r = (
                 (SCREEN.0 as f32 * (area as f32 / 100.0)) as i32,
                 (SCREEN.1 as f32 * (area as f32 / 100.0)) as i32,
             );
 
-            let rect = if (dim.1 as f32 / dim.0 as f32) < (2.0 / 3.0) {
-                r.0
-            } else {
-                r.1
-            };
-
-            image = image.resize(rect as _, rect as _, FilterType::Lanczos3);
+            image = image.resize(r.0 as _, r.1 as _, FilterType::CatmullRom);
             let center = (
                 (SCREEN.0 - image.width() as i32) / 2,
                 (SCREEN.1 - image.height() as i32) / 2,
@@ -183,20 +175,12 @@ impl Panel {
     }
 
     fn resize(&self, mut image: DynamicImage) -> (i32, i32) {
-        let dim = image.dimensions();
-
         let r = (
             (SCREEN.0 as f32 * (self.area as f32 / 100.0)) as i32,
             (SCREEN.1 as f32 * (self.area as f32 / 100.0)) as i32,
         );
 
-        let rect = if (dim.1 as f32 / dim.0 as f32) < (2.0 / 3.0) {
-            r.0
-        } else {
-            r.1
-        };
-
-        image = image.resize(rect as _, rect as _, FilterType::Lanczos3);
+        image = image.resize(r.0 as _, r.1 as _, FilterType::CatmullRom);
         let center = (
             (SCREEN.0 - image.width() as i32) / 2,
             (SCREEN.1 - image.height() as i32) / 2,
